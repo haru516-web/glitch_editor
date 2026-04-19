@@ -492,32 +492,77 @@ export default function App() {
 
     const exportCanvas = document.createElement("canvas");
     renderCanvas({ includeSelection: false, targetCanvas: exportCanvas });
+    const filename = `glitch-export-${Date.now()}.png`;
 
     const fallbackDownload = () => {
       const url = exportCanvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = url;
-      link.download = `glitch-export-${Date.now()}.png`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       link.remove();
     };
 
+    const downloadBlob = (blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+
+    const openBlobPreview = (blob) => {
+      const url = URL.createObjectURL(blob);
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+
+      if (!opened) {
+        window.location.href = url;
+      }
+
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      window.setTimeout(() => {
+        window.alert("画像を開きました。長押しまたは共有から保存してください。");
+      }, 50);
+    };
+
     if (exportCanvas.toBlob) {
-      exportCanvas.toBlob((blob) => {
+      exportCanvas.toBlob(async (blob) => {
         if (!blob) {
           fallbackDownload();
           return;
         }
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `glitch-export-${Date.now()}.png`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        const file = new File([blob], filename, { type: "image/png" });
+        const canShareFile =
+          typeof navigator.share === "function" &&
+          (typeof navigator.canShare !== "function" || navigator.canShare({ files: [file] }));
+
+        if (canShareFile) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: filename,
+            });
+            return;
+          } catch (error) {
+            if (error?.name === "AbortError") return;
+          }
+        }
+
+        const isMobileDevice =
+          /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+          (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.platform));
+
+        if (isMobileDevice) {
+          openBlobPreview(blob);
+          return;
+        }
+
+        downloadBlob(blob);
       }, "image/png");
       return;
     }
